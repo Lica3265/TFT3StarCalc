@@ -4,7 +4,7 @@ import math
 import random
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
+import json
 # 遊戲數據（調整為與截圖一致，Set 15 2025年數據）
 COST_TIERS = [1, 2, 3, 4, 5]
 COPIES_PER_CHAMP = {1: 30, 2: 25, 3: 18, 4: 10, 5: 9}  
@@ -27,7 +27,10 @@ DROP_RATES = {
 XP_TO_NEXT = {
     1: 0, 2: 2, 3: 6, 4: 10, 5: 20, 6: 36, 7: 48, 8: 76, 9: 84, 10: 0,
 }
-
+def load_language_data():
+    with open("languages.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+    
 def get_total_copies_per_tier():
     return {cost: NUM_CHAMPS_PER_TIER[cost] * COPIES_PER_CHAMP[cost] for cost in COST_TIERS}
 
@@ -102,80 +105,90 @@ def simulate_3star_probability(level, cost, owned, outside, max_gold=100, trials
         probabilities.append(success / trials * 100)
     
     return gold_steps, probabilities
-
 class TFTApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TFT 3-Star Calculator")
-        
+        self.language_data = load_language_data()  
+        self.language = "zh"                     
+        self.texts = self.language_data[self.language]  
+
+        self.root.title(self.texts["title"])
+
+        self.lang_btn = ttk.Button(root, text=self.texts["btn_switch"], command=self.switch_language)
+        self.lang_btn.pack(pady=5)
+
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(expand=True, fill='both')
-        
-        self.create_table_tab()
 
+        self.create_table_tab()
+    def switch_language(self):
+        self.language = "en" if self.language == "zh" else "zh"
+        self.texts = self.language_data[self.language]
+        self.root.title(self.texts["title"])
+        self.lang_btn.config(text=self.texts["btn_switch"])
+        self.notebook.forget(0)
+        self.create_table_tab()
     def create_table_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="計算結果")
-        
+        self.notebook.add(tab, text=self.texts["tab_result"])
+
         # 表格
-        tree = ttk.Treeview(tab, columns=("費用", "總張數", "Lv1", "Lv2", "Lv3", "Lv4", "Lv5", "Lv6", "Lv7", "Lv8", "Lv9", "Lv10"), show='headings', height=4)
-        tree.heading("費用", text="費用")
-        tree.heading("總張數", text="總張數")
-        for lvl in range(1, 11):
-            tree.heading(f"Lv{lvl}", text=f"Lv{lvl}")
-            tree.column(f"Lv{lvl}", width=60, anchor='center')
-        tree.column("費用", width=50, anchor='center')
-        tree.column("總張數", width=70, anchor='center')
-        
+        columns = [self.texts["table_cost"], self.texts["table_total"]] + [f"{self.texts['level_prefix']}{lvl}" for lvl in range(1, 11)]
+        tree = ttk.Treeview(tab, columns=columns, show='headings', height=4)
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=60 if "Lv" in col else 70, anchor='center')
+        tree.column(columns[0], width=50, anchor='center')
+
         total_copies = get_total_copies_per_tier()
         for cost in COST_TIERS:
             row = [cost, total_copies[cost]]
             for lvl in range(1, 11):
                 row.append(f"{DROP_RATES.get(lvl, [0]*5)[cost-1] * 100:.0f}%")
             tree.insert("", "end", values=row)
-        
+
         tree.pack(fill='x', padx=10, pady=5)
 
         # 輸入框區域
-        input_frame = ttk.LabelFrame(tab, text="輸入遊戲狀態", padding=10)
+        input_frame = ttk.LabelFrame(tab, text=self.texts["input_title"], padding=10)
         input_frame.pack(fill='x', padx=10, pady=5)
-        
-        ttk.Label(input_frame, text="棋子費用 (1-5):").grid(row=0, column=0, padx=5, pady=2)
+
+        ttk.Label(input_frame, text=self.texts["label_cost"]).grid(row=0, column=0, padx=5, pady=2)
         self.cost_entry = ttk.Entry(input_frame, width=10)
         self.cost_entry.grid(row=0, column=1, padx=5, pady=2)
-        self.cost_entry.insert(0, "1")  # 預設值
-        
-        ttk.Label(input_frame, text="自己擁有張數:").grid(row=0, column=2, padx=5, pady=2)
+        self.cost_entry.insert(0, "1")
+
+        ttk.Label(input_frame, text=self.texts["label_owned"]).grid(row=0, column=2, padx=5, pady=2)
         self.owned_entry = ttk.Entry(input_frame, width=10)
         self.owned_entry.grid(row=0, column=3, padx=5, pady=2)
-        
-        ttk.Label(input_frame, text="外面持有張數:").grid(row=1, column=0, padx=5, pady=2)
+
+        ttk.Label(input_frame, text=self.texts["label_outside"]).grid(row=1, column=0, padx=5, pady=2)
         self.outside_entry = ttk.Entry(input_frame, width=10)
         self.outside_entry.grid(row=1, column=1, padx=5, pady=2)
-        
-        ttk.Label(input_frame, text="當前等級:").grid(row=1, column=2, padx=5, pady=2)
+
+        ttk.Label(input_frame, text=self.texts["label_level"]).grid(row=1, column=2, padx=5, pady=2)
         self.level_entry = ttk.Entry(input_frame, width=10)
         self.level_entry.grid(row=1, column=3, padx=5, pady=2)
-        
-        ttk.Label(input_frame, text="目前金幣:").grid(row=2, column=0, padx=5, pady=2)
+
+        ttk.Label(input_frame, text=self.texts["label_money"]).grid(row=2, column=0, padx=5, pady=2)
         self.money_entry = ttk.Entry(input_frame, width=10)
         self.money_entry.grid(row=2, column=1, padx=5, pady=2)
-        
-        ttk.Label(input_frame, text="距離升級XP:").grid(row=2, column=2, padx=5, pady=2)
+
+        ttk.Label(input_frame, text=self.texts["label_xp"]).grid(row=2, column=2, padx=5, pady=2)
         self.xp_entry = ttk.Entry(input_frame, width=10)
         self.xp_entry.grid(row=2, column=3, padx=5, pady=2)
-        
-        calc_btn = ttk.Button(input_frame, text="計算並繪圖", command=self.calculate)
+
+        calc_btn = ttk.Button(input_frame, text=self.texts["btn_calculate"], command=self.calculate)
         calc_btn.grid(row=3, column=0, columnspan=4, pady=10)
 
         # 結果區域
-        self.result_frame = ttk.LabelFrame(tab, text="計算結果", padding=10)
+        self.result_frame = ttk.LabelFrame(tab, text=self.texts["result_title"], padding=10)
         self.result_frame.pack(fill='x', padx=10, pady=5)
         self.result_label = ttk.Label(self.result_frame, text="", justify='left', wraplength=400)
         self.result_label.pack(padx=5, pady=5)
 
         # 圖表區域
-        self.chart_frame = ttk.LabelFrame(tab, text="三星累積機率", padding=10)
+        self.chart_frame = ttk.LabelFrame(tab, text=self.texts["chart_title"], padding=10)
         self.chart_frame.pack(fill='both', expand=True, padx=10, pady=5)
         self.figure, self.ax = plt.subplots(figsize=(6, 3))
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.chart_frame)
@@ -189,18 +202,25 @@ class TFTApp:
             level = int(self.level_entry.get())
             money = int(self.money_entry.get())
             xp_to_next = int(self.xp_entry.get())
-            
+
             if cost not in COST_TIERS or level not in DROP_RATES:
-                raise ValueError("無效輸入")
-            
+                raise ValueError(self.texts["error"] + ": Invalid Input")
+
             exp_current = calculate_expected_gold(level, cost, owned, outside)
             upgrade_cost = calculate_upgrade_cost(xp_to_next)
             exp_next = calculate_expected_gold(level + 1, cost, owned, outside) if level < 10 else float('inf')
-            
+
             total_if_upgrade = upgrade_cost + exp_next
-            decision = "在當前等級抽牌" if exp_current < total_if_upgrade else "升級後抽牌"
-            
-            result = f"當前等級期望金幣: {exp_current}\n升級後期望金幣: {exp_next}\n升級成本: {upgrade_cost}\n建議: {decision}\n你有 {money} 金幣，錢夠嗎? {'是' if money >= min(exp_current, total_if_upgrade) else '否'}"
+            decision = self.texts["suggest_current"] if exp_current < total_if_upgrade else self.texts["suggest_upgrade"]
+
+            enough = self.texts["yes"] if money >= min(exp_current, total_if_upgrade) else self.texts["no"]
+            result = (
+                f"{self.texts['suggest_current']}: {exp_current}\n"
+                f"{self.texts['suggest_upgrade']}: {exp_next}\n"
+                f"Upgrade Cost: {upgrade_cost}\n"
+                f"Decision: {decision}\n"
+                f"You have {money} gold. Enough? {enough}"
+            )
             self.result_label.config(text=result)
 
             # 繪製圖表
@@ -209,13 +229,13 @@ class TFTApp:
             self.ax.plot(gold_steps, probabilities, marker='o', color='blue', linewidth=1.5)
             self.ax.set_xlabel("Gold Spent")
             self.ax.set_ylabel("Cumulative 3-Star Probability (%)")
-            self.ax.set_title(f"3-Star Probability (Cost {cost}, Level {level})")
+            self.ax.set_title(f"{self.texts['chart_title']} (Cost {cost}, Level {level})")
             self.ax.grid(True, linestyle='--', alpha=0.7)
             self.ax.set_ylim(0, 100)
             self.canvas.draw()
 
         except ValueError as e:
-            self.result_label.config(text=f"錯誤: {e}")
+            self.result_label.config(text=f"{self.texts['error']}: {e}")
             self.ax.clear()
             self.canvas.draw()
 
