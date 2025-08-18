@@ -149,6 +149,7 @@ class TFTApp:
         matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Microsoft YaHei', 'SimHei', 'sans-serif']
         matplotlib.rcParams['axes.unicode_minus'] = False
         self.root.title(self.texts["title"])
+        self.root.iconbitmap(default=resource_path("icon.ico"))
         self.lang_btn = ttk.Button(root, text=self.texts["btn_switch"], command=self.switch_language)
         self.lang_btn.pack(pady=5)
 
