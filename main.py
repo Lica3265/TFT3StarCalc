@@ -7,6 +7,7 @@ import random
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import json
+import matplotlib
 
 # 遊戲數據（根據你的指定，Set 15 2025年數據）
 COST_TIERS = [1, 2, 3, 4, 5]
@@ -145,7 +146,8 @@ class TFTApp:
         self.language_data = load_language_data()
         self.language = "zh"  # 預設語言
         self.texts = self.language_data[self.language]
-
+        matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Microsoft YaHei', 'SimHei', 'sans-serif']
+        matplotlib.rcParams['axes.unicode_minus'] = False
         self.root.title(self.texts["title"])
         self.lang_btn = ttk.Button(root, text=self.texts["btn_switch"], command=self.switch_language)
         self.lang_btn.pack(pady=5)
