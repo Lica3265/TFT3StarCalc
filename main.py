@@ -156,6 +156,9 @@ class TFTApp:
         self.create_input_tab()
         self.create_table_tab()
 
+        # 綁定視窗關閉事件
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
     def switch_language(self):
         """切換語言"""
         self.language = "en" if self.language == "zh" else "zh"
@@ -313,6 +316,19 @@ class TFTApp:
             self.result_label.config(text=f"{self.texts['error']}: {e}")
             self.ax.clear()
             self.canvas.draw()
+
+    def on_closing(self):
+        """處理視窗關閉事件，釋放資源"""
+        # 釋放 Matplotlib 資源
+        if hasattr(self, 'canvas'):
+            self.canvas.get_tk_widget().pack_forget()  # 移除畫布
+            plt.close(self.figure)  # 關閉圖形
+            self.canvas = None
+            self.figure = None
+            self.ax = None
+
+        # 銷毀根視窗
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
