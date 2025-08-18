@@ -3,6 +3,8 @@
 A lightweight and extensible app to help *Teamfight Tactics* (TFT) players calculate the optimal strategy for achieving 3-star champions. Input your current champion copies, outside copies, level, gold, and XP to next level, and the app computes the expected gold needed to hit 3 stars at your current level or after upgrading. It also provides strategic advice on whether to roll at your current level or upgrade first.
 
 ---
+## 下載
+ [TFT 3星計算機](https://github.com/Lica3265/TFT3StarCalc/releases/download/Initial_release/TFT3StarCalc.exe)
 
 ## 項目簡介
 
@@ -19,7 +21,11 @@ A lightweight and extensible app to help *Teamfight Tactics* (TFT) players calcu
 如果覺得這個工具實用，請點擊 ⭐ **Star** 支持本項目！歡迎貢獻代碼或提供反饋。
 
 ---
+## Downloads
+The latest version of the executable (`.exe`) is available for download:
+ [TFT 3-Star Calculator (Windows)](https://github.com/Lica3265/TFT3StarCalc/releases/download/Initial_release/TFT3StarCalc.exe)
 
+*Note*: This executable is built for Windows. Ensure you have the necessary permissions to run `.exe` files on your system.
 ## Installation
 
 ### Requirements
