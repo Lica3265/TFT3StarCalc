@@ -30,7 +30,7 @@ A lightweight and extensible app to help *Teamfight Tactics* (TFT) players calcu
 ### Steps
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/TFT3StarCalc.git
+   git clone https://github.com/Lica3265/TFT3StarCalc.git
    ```
 2. Navigate to the project directory:
    ```bash
