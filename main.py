@@ -1,0 +1,225 @@
+import tkinter as tk
+from tkinter import ttk
+import math
+import random
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# 遊戲數據（調整為與截圖一致，Set 15 2025年數據）
+COST_TIERS = [1, 2, 3, 4, 5]
+COPIES_PER_CHAMP = {1: 30, 2: 25, 3: 18, 4: 10, 5: 9}  
+NUM_CHAMPS_PER_TIER = {1: 15, 2: 13, 3: 12, 4: 13, 5: 8}
+
+# 等級抽卡機率（與截圖一致）
+DROP_RATES = {
+    1: [1.00, 0.00, 0.00, 0.00, 0.00],
+    2: [1.00, 0.00, 0.00, 0.00, 0.00],
+    3: [0.75, 0.25, 0.00, 0.00, 0.00],
+    4: [0.55, 0.30, 0.15, 0.00, 0.00],
+    5: [0.45, 0.33, 0.20, 0.02, 0.00],
+    6: [0.30, 0.40, 0.25, 0.05, 0.00],
+    7: [0.19, 0.30, 0.40, 0.10, 0.01],
+    8: [0.17, 0.24, 0.32, 0.24, 0.03],
+    9: [0.15, 0.18, 0.25, 0.30, 0.12],
+    10: [0.05, 0.10, 0.20, 0.40, 0.25],
+}
+
+XP_TO_NEXT = {
+    1: 0, 2: 2, 3: 6, 4: 10, 5: 20, 6: 36, 7: 48, 8: 76, 9: 84, 10: 0,
+}
+
+def get_total_copies_per_tier():
+    return {cost: NUM_CHAMPS_PER_TIER[cost] * COPIES_PER_CHAMP[cost] for cost in COST_TIERS}
+
+def expected_slots_to_next(remaining, tier_pool, p_tier):
+    if remaining <= 0:
+        return 0
+    p_specific = p_tier * (remaining / tier_pool)
+    return 1 / p_specific if p_specific > 0 else float('inf')
+
+def calculate_expected_gold(level, cost, owned, outside):
+    if owned >= 9:
+        return 0
+    initial_copies = COPIES_PER_CHAMP[cost]
+    remaining = initial_copies - owned - outside
+    needed = 9 - owned
+    if remaining < needed:
+        return float('inf')
+
+    num_champs = NUM_CHAMPS_PER_TIER[cost]
+    full_tier_pool = num_champs * initial_copies
+    current_tier_pool = full_tier_pool - (initial_copies - remaining)
+
+    p_tier = DROP_RATES.get(level, [0]*5)[cost-1]
+
+    expected_slots = 0
+    for _ in range(needed):
+        expected_slots += expected_slots_to_next(remaining, current_tier_pool, p_tier)
+        remaining -= 1
+        current_tier_pool -= 1
+
+    slots_per_roll = 5
+    expected_rolls = expected_slots / slots_per_roll
+    gold_per_roll = 2
+    return math.ceil(expected_rolls * gold_per_roll)
+
+def calculate_upgrade_cost(xp_to_next):
+    if xp_to_next <= 0:
+        return 0
+    buys_needed = math.ceil(xp_to_next / 4)
+    return buys_needed * 4
+
+# Monte Carlo 模擬三星累積機率
+def simulate_3star_probability(level, cost, owned, outside, max_gold=100, trials=1000):
+    initial_copies = COPIES_PER_CHAMP[cost]
+    num_champs = NUM_CHAMPS_PER_TIER[cost]
+    full_tier_pool = num_champs * initial_copies
+    p_tier = DROP_RATES.get(level, [0]*5)[cost-1]
+    
+    gold_steps = list(range(0, max_gold + 1, 2))
+    probabilities = []
+    
+    for gold in gold_steps:
+        rolls = gold // 2
+        slots = rolls * 5
+        success = 0
+        for _ in range(trials):
+            current_owned = owned
+            current_outside = outside
+            current_pool = full_tier_pool - current_outside
+            for _ in range(slots):
+                if current_pool <= 0 or current_owned >= 9:
+                    break
+                p_specific = p_tier * ((initial_copies - current_owned - current_outside) / current_pool)
+                if random.random() < p_specific:
+                    current_owned += 1
+                    current_pool -= 1
+                else:
+                    current_pool -= 1
+                if current_owned >= 9:
+                    success += 1
+                    break
+        probabilities.append(success / trials * 100)
+    
+    return gold_steps, probabilities
+
+class TFTApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("TFT 3-Star Calculator")
+        
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(expand=True, fill='both')
+        
+        self.create_table_tab()
+
+    def create_table_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="計算結果")
+        
+        # 表格
+        tree = ttk.Treeview(tab, columns=("費用", "總張數", "Lv1", "Lv2", "Lv3", "Lv4", "Lv5", "Lv6", "Lv7", "Lv8", "Lv9", "Lv10"), show='headings', height=4)
+        tree.heading("費用", text="費用")
+        tree.heading("總張數", text="總張數")
+        for lvl in range(1, 11):
+            tree.heading(f"Lv{lvl}", text=f"Lv{lvl}")
+            tree.column(f"Lv{lvl}", width=60, anchor='center')
+        tree.column("費用", width=50, anchor='center')
+        tree.column("總張數", width=70, anchor='center')
+        
+        total_copies = get_total_copies_per_tier()
+        for cost in COST_TIERS:
+            row = [cost, total_copies[cost]]
+            for lvl in range(1, 11):
+                row.append(f"{DROP_RATES.get(lvl, [0]*5)[cost-1] * 100:.0f}%")
+            tree.insert("", "end", values=row)
+        
+        tree.pack(fill='x', padx=10, pady=5)
+
+        # 輸入框區域
+        input_frame = ttk.LabelFrame(tab, text="輸入遊戲狀態", padding=10)
+        input_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(input_frame, text="棋子費用 (1-5):").grid(row=0, column=0, padx=5, pady=2)
+        self.cost_entry = ttk.Entry(input_frame, width=10)
+        self.cost_entry.grid(row=0, column=1, padx=5, pady=2)
+        self.cost_entry.insert(0, "1")  # 預設值
+        
+        ttk.Label(input_frame, text="自己擁有張數:").grid(row=0, column=2, padx=5, pady=2)
+        self.owned_entry = ttk.Entry(input_frame, width=10)
+        self.owned_entry.grid(row=0, column=3, padx=5, pady=2)
+        
+        ttk.Label(input_frame, text="外面持有張數:").grid(row=1, column=0, padx=5, pady=2)
+        self.outside_entry = ttk.Entry(input_frame, width=10)
+        self.outside_entry.grid(row=1, column=1, padx=5, pady=2)
+        
+        ttk.Label(input_frame, text="當前等級:").grid(row=1, column=2, padx=5, pady=2)
+        self.level_entry = ttk.Entry(input_frame, width=10)
+        self.level_entry.grid(row=1, column=3, padx=5, pady=2)
+        
+        ttk.Label(input_frame, text="目前金幣:").grid(row=2, column=0, padx=5, pady=2)
+        self.money_entry = ttk.Entry(input_frame, width=10)
+        self.money_entry.grid(row=2, column=1, padx=5, pady=2)
+        
+        ttk.Label(input_frame, text="距離升級XP:").grid(row=2, column=2, padx=5, pady=2)
+        self.xp_entry = ttk.Entry(input_frame, width=10)
+        self.xp_entry.grid(row=2, column=3, padx=5, pady=2)
+        
+        calc_btn = ttk.Button(input_frame, text="計算並繪圖", command=self.calculate)
+        calc_btn.grid(row=3, column=0, columnspan=4, pady=10)
+
+        # 結果區域
+        self.result_frame = ttk.LabelFrame(tab, text="計算結果", padding=10)
+        self.result_frame.pack(fill='x', padx=10, pady=5)
+        self.result_label = ttk.Label(self.result_frame, text="", justify='left', wraplength=400)
+        self.result_label.pack(padx=5, pady=5)
+
+        # 圖表區域
+        self.chart_frame = ttk.LabelFrame(tab, text="三星累積機率", padding=10)
+        self.chart_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        self.figure, self.ax = plt.subplots(figsize=(6, 3))
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.chart_frame)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+    def calculate(self):
+        try:
+            cost = int(self.cost_entry.get())
+            owned = int(self.owned_entry.get())
+            outside = int(self.outside_entry.get())
+            level = int(self.level_entry.get())
+            money = int(self.money_entry.get())
+            xp_to_next = int(self.xp_entry.get())
+            
+            if cost not in COST_TIERS or level not in DROP_RATES:
+                raise ValueError("無效輸入")
+            
+            exp_current = calculate_expected_gold(level, cost, owned, outside)
+            upgrade_cost = calculate_upgrade_cost(xp_to_next)
+            exp_next = calculate_expected_gold(level + 1, cost, owned, outside) if level < 10 else float('inf')
+            
+            total_if_upgrade = upgrade_cost + exp_next
+            decision = "在當前等級抽牌" if exp_current < total_if_upgrade else "升級後抽牌"
+            
+            result = f"當前等級期望金幣: {exp_current}\n升級後期望金幣: {exp_next}\n升級成本: {upgrade_cost}\n建議: {decision}\n你有 {money} 金幣，錢夠嗎? {'是' if money >= min(exp_current, total_if_upgrade) else '否'}"
+            self.result_label.config(text=result)
+
+            # 繪製圖表
+            self.ax.clear()
+            gold_steps, probabilities = simulate_3star_probability(level, cost, owned, outside)
+            self.ax.plot(gold_steps, probabilities, marker='o', color='blue', linewidth=1.5)
+            self.ax.set_xlabel("Gold Spent")
+            self.ax.set_ylabel("Cumulative 3-Star Probability (%)")
+            self.ax.set_title(f"3-Star Probability (Cost {cost}, Level {level})")
+            self.ax.grid(True, linestyle='--', alpha=0.7)
+            self.ax.set_ylim(0, 100)
+            self.canvas.draw()
+
+        except ValueError as e:
+            self.result_label.config(text=f"錯誤: {e}")
+            self.ax.clear()
+            self.canvas.draw()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TFTApp(root)
+    root.mainloop()
