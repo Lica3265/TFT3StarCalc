@@ -144,3 +144,6 @@ Please report bugs or suggest features via GitHub Issues.
 This project is licensed under the MIT License - see the LICENSE file for details.
 #### Support
 If you find this tool helpful, please ⭐ star the repo to show your support! Your feedback helps improve the project.
+
+![中文](assets/zh.png)
+![英文](assets/en.png)
