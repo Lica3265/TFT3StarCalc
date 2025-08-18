@@ -11,6 +11,7 @@ import json
 # 遊戲數據（根據你的指定，Set 15 2025年數據）
 COST_TIERS = [1, 2, 3, 4, 5]
 COPIES_PER_CHAMP = {1: 30, 2: 25, 3: 18, 4: 10, 5: 9}
+# 五費牌中艾克抽不到
 NUM_CHAMPS_PER_TIER = {1: 15, 2: 13, 3: 12, 4: 13, 5: 8}
 
 # 等級抽卡機率
@@ -54,30 +55,33 @@ def get_total_copies_per_tier():
 def expected_slots_to_next(remaining, tier_pool, p_tier):
     """計算下一次抽到特定棋子的期望抽數"""
     if remaining <= 0:
-        return 0
+        return float('inf')
     p_specific = p_tier * (remaining / tier_pool)
     return 1 / p_specific if p_specific > 0 else float('inf')
 
 # 計算期望金幣數
-def calculate_expected_gold(level, cost, owned, outside):
+def calculate_expected_gold(level, cost, owned, outside, outside_other=0):
     """計算在當前等級抽到三星的期望金幣數"""
     if owned >= 9:
         return 0
     initial_copies = COPIES_PER_CHAMP[cost]
-    remaining = initial_copies - owned - outside
+    remaining = max(0, initial_copies - owned - outside)
     needed = 9 - owned
     if remaining < needed:
         return float('inf')
 
     num_champs = NUM_CHAMPS_PER_TIER[cost]
     full_tier_pool = num_champs * initial_copies
-    current_tier_pool = full_tier_pool - (initial_copies - remaining)
+    current_tier_pool = max(0, full_tier_pool - outside - outside_other - owned)
 
-    p_tier = DROP_RATES.get(level, [0] * 5)[cost - 1]
+    p_tier = DROP_RATES.get(level, [0]*5)[cost-1]
 
     expected_slots = 0
     for _ in range(needed):
-        expected_slots += expected_slots_to_next(remaining, current_tier_pool, p_tier)
+        if remaining <= 0:
+            return float('inf')
+        p_specific = p_tier * (remaining / current_tier_pool) if current_tier_pool > 0 else 0
+        expected_slots += 1 / p_specific if p_specific > 0 else float('inf')
         remaining -= 1
         current_tier_pool -= 1
 
@@ -95,8 +99,8 @@ def calculate_upgrade_cost(xp_to_next):
     return buys_needed * 4
 
 # 模擬三星累積機率
-def simulate_3star_probability(level, cost, owned, outside, max_gold=100, trials=1000):
-    """使用 Monte Carlo 模擬計算三星累積機率"""
+def simulate_3star_probability(level, cost, owned, outside, outside_other=0, max_gold=100, trials=1000):
+    """使用 Monte Carlo 模擬計算三星累積機率，考慮其他同費用棋子的場外張數"""
     initial_copies = COPIES_PER_CHAMP[cost]
     num_champs = NUM_CHAMPS_PER_TIER[cost]
     full_tier_pool = num_champs * initial_copies
@@ -112,13 +116,17 @@ def simulate_3star_probability(level, cost, owned, outside, max_gold=100, trials
         for _ in range(trials):
             current_owned = owned
             current_outside = outside
-            current_pool = full_tier_pool - current_outside
+            remaining = initial_copies - current_owned - current_outside
+            current_pool = max(0, full_tier_pool - current_outside - outside_other)
             for _ in range(slots):
                 if current_pool <= 0 or current_owned >= 9:
                     break
-                p_specific = p_tier * ((initial_copies - current_owned - current_outside) / current_pool)
+                if remaining <= 0:
+                    break
+                p_specific = p_tier * (remaining / current_pool) if current_pool > 0 else 0
                 if random.random() < p_specific:
                     current_owned += 1
+                    remaining -= 1
                     current_pool -= 1
                 else:
                     current_pool -= 1
@@ -145,6 +153,7 @@ class TFTApp:
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(expand=True, fill="both")
 
+        self.create_input_tab()
         self.create_table_tab()
 
     def switch_language(self):
@@ -153,80 +162,110 @@ class TFTApp:
         self.texts = self.language_data[self.language]
         self.root.title(self.texts["title"])
         self.lang_btn.config(text=self.texts["btn_switch"])
-        self.notebook.forget(0)
+
+        for tab_id in self.notebook.tabs():
+            self.notebook.forget(tab_id)
+      
+        self.create_input_tab()
         self.create_table_tab()
 
-    def create_table_tab(self):
-        """創建計算結果標籤頁"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text=self.texts["tab_result"])
-
-        # 創建表格
-        columns = [self.texts["table_cost"], self.texts["table_total"]] + \
-                  [f"{self.texts['level_prefix']}{lvl}" for lvl in range(1, 11)]
-        tree = ttk.Treeview(tab, columns=columns, show="headings", height=4)
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=60 if "Lv" in col else 70, anchor="center")
-        tree.column(columns[0], width=50, anchor="center")
-
-        total_copies = get_total_copies_per_tier()
-        for cost in COST_TIERS:
-            row = [cost, total_copies[cost]]
-            for lvl in range(1, 11):
-                row.append(f"{DROP_RATES.get(lvl, [0] * 5)[cost - 1] * 100:.0f}%")
-            tree.insert("", "end", values=row)
-
-        tree.pack(fill="x", padx=10, pady=5)
+    def create_input_tab(self):
+        """創建輸入與計算標籤頁"""
+        tab1 = ttk.Frame(self.notebook)
+        self.notebook.add(tab1, text=self.texts["tab_input"])
 
         # 創建輸入框區域
-        input_frame = ttk.LabelFrame(tab, text=self.texts["input_title"], padding=10)
+        input_frame = ttk.LabelFrame(tab1, text=self.texts["input_title"], padding=10)
         input_frame.pack(fill="x", padx=10, pady=5)
 
         ttk.Label(input_frame, text=self.texts["label_cost"]).grid(row=0, column=0, padx=5, pady=2)
         self.cost_entry = ttk.Entry(input_frame, width=10)
         self.cost_entry.grid(row=0, column=1, padx=5, pady=2)
-        self.cost_entry.insert(0, "1")
+        self.cost_entry.insert(0, "4")
 
         ttk.Label(input_frame, text=self.texts["label_owned"]).grid(row=0, column=2, padx=5, pady=2)
         self.owned_entry = ttk.Entry(input_frame, width=10)
         self.owned_entry.grid(row=0, column=3, padx=5, pady=2)
+        self.owned_entry.insert(0, "7")
 
         ttk.Label(input_frame, text=self.texts["label_outside"]).grid(row=1, column=0, padx=5, pady=2)
         self.outside_entry = ttk.Entry(input_frame, width=10)
         self.outside_entry.grid(row=1, column=1, padx=5, pady=2)
+        self.outside_entry.insert(0, "0")
 
         ttk.Label(input_frame, text=self.texts["label_outside_othercopies"]).grid(row=1, column=2, padx=5, pady=2)
         self.outside_other_entry = ttk.Entry(input_frame, width=10)
         self.outside_other_entry.grid(row=1, column=3, padx=5, pady=2)
+        self.outside_other_entry.insert(0, "42")
 
         ttk.Label(input_frame, text=self.texts["label_level"]).grid(row=2, column=0, padx=5, pady=2)
         self.level_entry = ttk.Entry(input_frame, width=10)
         self.level_entry.grid(row=2, column=1, padx=5, pady=2)
+        self.level_entry.insert(0, "8")
 
         ttk.Label(input_frame, text=self.texts["label_money"]).grid(row=2, column=2, padx=5, pady=2)
         self.money_entry = ttk.Entry(input_frame, width=10)
         self.money_entry.grid(row=2, column=3, padx=5, pady=2)
+        self.money_entry.insert(0, "100")
 
         ttk.Label(input_frame, text=self.texts["label_xp"]).grid(row=3, column=0, padx=5, pady=2)
         self.xp_entry = ttk.Entry(input_frame, width=10)
         self.xp_entry.grid(row=3, column=1, padx=5, pady=2)
+        self.xp_entry.insert(0, "20")
 
         calc_btn = ttk.Button(input_frame, text=self.texts["btn_calculate"], command=self.calculate)
         calc_btn.grid(row=4, column=0, columnspan=4, pady=10)
 
         # 創建結果區域
-        self.result_frame = ttk.LabelFrame(tab, text=self.texts["result_title"], padding=10)
+        self.result_frame = ttk.LabelFrame(tab1, text=self.texts["result_title"], padding=10)
         self.result_frame.pack(fill="x", padx=10, pady=5)
         self.result_label = ttk.Label(self.result_frame, text="", justify="left", wraplength=400)
         self.result_label.pack(padx=5, pady=5)
 
         # 創建圖表區域
-        self.chart_frame = ttk.LabelFrame(tab, text=self.texts["chart_title"], padding=10)
+        self.chart_frame = ttk.LabelFrame(tab1, text=self.texts["chart_title"], padding=10)
         self.chart_frame.pack(fill="both", expand=True, padx=10, pady=5)
         self.figure, self.ax = plt.subplots(figsize=(6, 3))
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.chart_frame)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def create_table_tab(self):
+        """創建概率與傷害計算標籤頁"""
+        tab2 = ttk.Frame(self.notebook)
+        self.notebook.add(tab2, text=self.texts["tab_table"])
+
+        # 概率表格
+        columns_prob = ["Level"] + [f"Cost {cost}" for cost in COST_TIERS]
+        tree_prob = ttk.Treeview(tab2, columns=columns_prob, show="headings", height=10)
+        for col in columns_prob:
+            tree_prob.heading(col, text=col)
+            tree_prob.column(col, width=50 if col == "Level" else 70, anchor="center")
+        for lvl in range(1, 11):
+            probabilities = [f"{DROP_RATES.get(lvl, [0] * 5)[cost - 1] * 100:.0f}%" for cost in COST_TIERS]
+            tree_prob.insert("", "end", values=["Lv" + str(lvl)] + probabilities)
+        tree_prob.pack(fill="x", padx=10, pady=5)
+
+        # 階段傷害表格
+        damage_data = {
+            1: 0,
+            2: 2,
+            3: 5,
+            4: 8,
+            5: 10,
+            6: 12,
+            7: 17
+        }
+        columns_damage = ["Round", "Base Damage"]
+        tree_damage = ttk.Treeview(tab2, columns=columns_damage, show="headings", height=7)
+        for col in columns_damage:
+            tree_damage.heading(col, text=col)
+            tree_damage.column(col, width=100, anchor="center")
+        cumulative = 0
+        for round_num in range(1, 8):
+            base_damage = damage_data.get(round_num, 17)  # 7+ 使用 17
+            cumulative += base_damage
+            tree_damage.insert("", "end", values=[f" Round {round_num}", f"+{base_damage} Damage"])
+        tree_damage.pack(fill="x", padx=10, pady=10)
 
     def calculate(self):
         """執行計算並更新顯示"""
@@ -234,6 +273,7 @@ class TFTApp:
             cost = int(self.cost_entry.get())
             owned = int(self.owned_entry.get())
             outside = int(self.outside_entry.get())
+            outside_other = int(self.outside_other_entry.get())
             level = int(self.level_entry.get())
             money = int(self.money_entry.get())
             xp_to_next = int(self.xp_entry.get())
@@ -241,9 +281,9 @@ class TFTApp:
             if cost not in COST_TIERS or level not in DROP_RATES:
                 raise ValueError(self.texts["error"] + ": Invalid Input")
 
-            exp_current = calculate_expected_gold(level, cost, owned, outside)
+            exp_current = calculate_expected_gold(level, cost, owned, outside, outside_other)
             upgrade_cost = calculate_upgrade_cost(xp_to_next)
-            exp_next = calculate_expected_gold(level + 1, cost, owned, outside) if level < 10 else float('inf')
+            exp_next = calculate_expected_gold(level + 1, cost, owned, outside, outside_other) if level < 10 else float('inf')
 
             total_if_upgrade = upgrade_cost + exp_next
             decision = self.texts["suggest_current"] if exp_current < total_if_upgrade else self.texts["suggest_upgrade"]
@@ -260,7 +300,7 @@ class TFTApp:
 
             # 繪製圖表
             self.ax.clear()
-            gold_steps, probabilities = simulate_3star_probability(level, cost, owned, outside)
+            gold_steps, probabilities = simulate_3star_probability(level, cost, owned, outside, outside_other)
             self.ax.plot(gold_steps, probabilities, marker="o", color="blue", linewidth=1.5)
             self.ax.set_xlabel(self.texts["chart_xlabel"])
             self.ax.set_ylabel(self.texts["chart_ylabel"])
