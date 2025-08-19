@@ -60,14 +60,14 @@ def expected_slots_to_next(remaining, tier_pool, p_tier):
     p_specific = p_tier * (remaining / tier_pool)
     return 1 / p_specific if p_specific > 0 else float('inf')
 
-# 計算期望金幣數
-def calculate_expected_gold(level, cost, owned, outside, outside_other=0):
-    """計算在當前等級抽到三星的期望金幣數"""
-    if owned >= 9:
+# 計算期望金幣數（支援不同目標張數）
+def calculate_expected_gold(level, cost, owned, outside, outside_other=0, target_copies=9):
+    """計算到指定張數的期望金幣數，預設目標為 9 張（3 星）"""
+    if owned >= target_copies:
         return 0
     initial_copies = COPIES_PER_CHAMP[cost]
     remaining = max(0, initial_copies - owned - outside)
-    needed = 9 - owned
+    needed = target_copies - owned
     if remaining < needed:
         return float('inf')
 
@@ -91,6 +91,10 @@ def calculate_expected_gold(level, cost, owned, outside, outside_other=0):
     gold_per_roll = 2
     return math.ceil(expected_rolls * gold_per_roll)
 
+# 計算到 2 星（3 張）的期望金幣
+def calculate_expected_gold_to_2star(level, cost, owned, outside, outside_other=0):
+    return calculate_expected_gold(level, cost, owned, outside, outside_other, target_copies=3)
+
 # 計算升級成本
 def calculate_upgrade_cost(xp_to_next):
     """計算升級所需的金幣成本"""
@@ -99,9 +103,9 @@ def calculate_upgrade_cost(xp_to_next):
     buys_needed = math.ceil(xp_to_next / 4)
     return buys_needed * 4
 
-# 模擬三星累積機率
-def simulate_3star_probability(level, cost, owned, outside, outside_other=0, max_gold=100, trials=1000):
-    """使用 Monte Carlo 模擬計算三星累積機率，考慮其他同費用棋子的場外張數"""
+# 模擬到指定張數的累積機率
+def simulate_probability(level, cost, owned, outside, outside_other=0, max_gold=100, trials=1000, target_copies=9):
+    """使用 Monte Carlo 模擬計算到指定張數的累積機率，預設目標為 9 張（3 星）"""
     initial_copies = COPIES_PER_CHAMP[cost]
     num_champs = NUM_CHAMPS_PER_TIER[cost]
     full_tier_pool = num_champs * initial_copies
@@ -120,7 +124,7 @@ def simulate_3star_probability(level, cost, owned, outside, outside_other=0, max
             remaining = initial_copies - current_owned - current_outside
             current_pool = max(0, full_tier_pool - current_outside - outside_other)
             for _ in range(slots):
-                if current_pool <= 0 or current_owned >= 9:
+                if current_pool <= 0 or current_owned >= target_copies:
                     break
                 if remaining <= 0:
                     break
@@ -131,7 +135,7 @@ def simulate_3star_probability(level, cost, owned, outside, outside_other=0, max
                     current_pool -= 1
                 else:
                     current_pool -= 1
-                if current_owned >= 9:
+                if current_owned >= target_copies:
                     success += 1
                     break
         probabilities.append(success / trials * 100)
@@ -287,16 +291,22 @@ class TFTApp:
             if cost not in COST_TIERS or level not in DROP_RATES:
                 raise ValueError(self.texts["error"] + ": Invalid Input")
 
-            exp_current = calculate_expected_gold(level, cost, owned, outside, outside_other)
+            # 計算到 2 星與 3 星的期望金幣
+            exp_2star = calculate_expected_gold_to_2star(level, cost, owned, outside, outside_other)
+            exp_3star = calculate_expected_gold(level, cost, owned, outside, outside_other)
+
             upgrade_cost = calculate_upgrade_cost(xp_to_next)
             exp_next = calculate_expected_gold(level + 1, cost, owned, outside, outside_other) if level < 10 else float('inf')
 
             total_if_upgrade = upgrade_cost + exp_next
-            decision = self.texts["suggest_current"] if exp_current < total_if_upgrade else self.texts["suggest_upgrade"]
+            decision = self.texts["suggest_current"] if exp_3star < total_if_upgrade else self.texts["suggest_upgrade"]
 
-            enough = self.texts["yes"] if money >= min(exp_current, total_if_upgrade) else self.texts["no"]
+            enough = self.texts["yes"] if money >= min(exp_3star, total_if_upgrade) else self.texts["no"]
+
+            # 顯示結果：2星、3星
             result = (
-                f"{self.texts['suggest_current']}: {exp_current}\n"
+                f"2★ {self.texts['suggest_current']}: {exp_2star}\n"
+                f"3★ {self.texts['suggest_current']}: {exp_3star}\n"
                 f"{self.texts['suggest_upgrade']}: {exp_next}\n"
                 f"{self.texts['upgrade_cost']}: {upgrade_cost}\n"
                 f"{self.texts['decision']}: {decision}\n"
@@ -304,21 +314,27 @@ class TFTApp:
             )
             self.result_label.config(text=result)
 
-            # 繪製圖表
+            # 繪製圖表：兩條線（2星、3星）
             self.ax.clear()
-            gold_steps, probabilities = simulate_3star_probability(level, cost, owned, outside, outside_other)
-            self.ax.plot(gold_steps, probabilities, marker="o", color="blue", linewidth=1.5)
+            gold_steps, prob_3star = simulate_probability(level, cost, owned, outside, outside_other, target_copies=9)
+            _, prob_2star = simulate_probability(level, cost, owned, outside, outside_other, target_copies=3)
+
+            self.ax.plot(gold_steps, prob_3star, marker="o", color="blue", linewidth=1.5, label="3★")
+            self.ax.plot(gold_steps, prob_2star, marker="s", color="green", linewidth=1.5, label="2★")
+
             self.ax.set_xlabel(self.texts["chart_xlabel"])
             self.ax.set_ylabel(self.texts["chart_ylabel"])
             self.ax.set_title(f"{self.texts['chart_title']} (Cost {cost}, Level {level})")
             self.ax.grid(True, linestyle="--", alpha=0.7)
             self.ax.set_ylim(0, 100)
+            self.ax.legend()
             self.canvas.draw()
 
         except ValueError as e:
             self.result_label.config(text=f"{self.texts['error']}: {e}")
             self.ax.clear()
             self.canvas.draw()
+
 
     def on_closing(self):
         """處理視窗關閉事件，釋放資源"""
