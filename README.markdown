@@ -145,5 +145,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 #### Support
 If you find this tool helpful, please ⭐ star the repo to show your support! Your feedback helps improve the project.
 
-![中文](assets/zh.png)
-![英文](assets/en.png)
+![中文](assets/2starzh.png)
+![英文](assets/2staren.png)
