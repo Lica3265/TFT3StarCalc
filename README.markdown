@@ -13,7 +13,7 @@
 - 使用 Python 和 Tkinter 構建，可編譯為 EXE 獨立運行。
 
 #### 下載
-[TFT 3星計算機](https://github.com/Lica3265/TFT3StarCalc/releases/download/Initial_release/TFT3StarCalc.exe)
+[TFT 3星計算機](https://github.com/Lica3265/TFT3StarCalc/releases/download/update_release/TFT3StarCalc.exe
 
 *注意*：此可執行文件適用於 Windows。請確保你的系統有權限運行 `.exe` 文件。
 
@@ -67,7 +67,7 @@
 
 #### Downloads
 The latest version of the executable (`.exe`) is available for download:
-[TFT 3-Star Calculator (Windows)](https://github.com/Lica3265/TFT3StarCalc/releases/download/Initial_release/TFT3StarCalc.exe)
+[TFT 3-Star Calculator (Windows)](https://github.com/Lica3265/TFT3StarCalc/releases/download/update_release/TFT3StarCalc.exe)
 
 *Note*: This executable is built for Windows. Ensure you have the necessary permissions to run `.exe` files on your system.
 
