@@ -100,7 +100,7 @@ The latest version of the executable (`.exe`) is available for download:
    ```
    4.(Optional) Compile to EXE:
    ```
-   python -m PyInstaller --onefile --noconsole --add-data "languages.json;." --add-data "icon.ico;." --hidden-import=tkinter --hidden-import=matplotlib --hidden-import=matplotlib.pyplot --distpath="../TFT3StarCalcBuild" main.py
+   python -m PyInstaller TFT3StarCalc.spec
    ```
 
 The compiled EXE will be in the TFT3StarCalcBuild/ folder.
