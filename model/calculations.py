@@ -1,6 +1,6 @@
 import math
 import random
-from .data import DROP_RATES, COPIES_PER_CHAMP, NUM_CHAMPS_PER_TIER
+from .data import DROP_RATES, COPIES_PER_CHAMP, NUM_CHAMPS_PER_TIER,COST_TIERS
 # 計算下一次抽到特定棋子的期望抽數
 def expected_slots_to_next(remaining, tier_pool, p_tier):
     """計算下一次抽到特定棋子的期望抽數"""

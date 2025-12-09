@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib
 from model.data import DROP_RATES, DAMAGE_DATA, COST_TIERS
+from utils.resources import resource_path
 
 matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Microsoft YaHei', 'SimHei', 'sans-serif']
 matplotlib.rcParams['axes.unicode_minus'] = False
